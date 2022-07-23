@@ -22,10 +22,11 @@ if command -v asdf
 then
     asdf current erlang
     asdf current elixir
-    echo 'ERLANG VERSION:'
-    erl -noinput -eval 'F=filename:join([code:root_dir(), "releases", erlang:system_info(otp_release), "OTP_VERSION"]),io:format("~p~n",[
-file:read_file(F)]),halt().'
 fi
+
+echo 'ERLANG VERSION:'
+erl -noinput -eval 'F=filename:join([code:root_dir(), "releases", erlang:system_info(otp_release), "OTP_VERSION"]),io:format("~p~n",[
+file:read_file(F)]),halt().'
 
 {
     cd "$dir/rabbitmq-server"
@@ -39,23 +40,30 @@ fi
 
 wait
 
-#### {
-####     cd "$dir/rabbitmq-server"
-#### 
-####     set_erlang_version
-#### 
-####     make TEST_TMPDIR="$test_tmpdir" RABBITMQ_CONFIG_FILE="$dir/rabbitmq.conf" PLUGINS='rabbitmq_management rabbitmq_top' NODES=3 start-cluster
-#### 
-####     ./sbin/rabbitmqctl --node rabbit-1 set_policy --apply-to queues \
-####         --priority 0 policy-0 ".*" '{"ha-mode":"all", "ha-sync-mode": "automatic", "queue-mode": "lazy"}'
-#### 
-####     ./sbin/rabbitmqctl --node rabbit-1 set_policy --apply-to queues \
-####         --priority 1 policy-1 ".*" '{"ha-mode":"all", "ha-sync-mode": "automatic"}'
-#### }
-#### 
-#### make -C "$dir/rabbitmq-perf-test" ARGS='--consumers 0 --producers 1 --predeclared --queue gh-5086 --pmessages 2000000 --size 1024' run
-#### 
-#### {
-####     cd "$dir/rabbitmq-server"
-####     ./sbin/rabbitmqctl --node rabbit-1 clear_policy policy-1
-#### }
+"$rabbitmqadmin_bin" declare queue name=dlq auto_delete=false durable=true
+
+{
+    cd "$dir/rabbitmq-server"
+
+    make TEST_TMPDIR="$test_tmpdir" RABBITMQ_CONFIG_FILE="$dir/rabbitmq.conf" PLUGINS='rabbitmq_management rabbitmq_top' NODES=3 start-cluster
+
+    ./sbin/rabbitmqctl --node rabbit-1 set_policy --apply-to queues \
+        --priority 0 ha "." '{"ha-mode":"all", "ha-sync-mode": "automatic", "queue-mode": "lazy"}'
+}
+
+make -C "$dir/rabbitmq-perf-test" ARGS='--consumers 0 --producers 1 --predeclared --queue gh-5086 --pmessages 2000000 --size 1024' run
+
+{
+    cd "$dir/rabbitmq-perf-test"
+    mvn exec:java -Dexec.mainClass=com.rabbitmq.perf.PerfTest \
+        -Dexec.args='--queue input --uri amqp://localhost:5672 --auto-delete false --flag persistent --queue-args x-dead-letter-exchange=,x-dead-letter-routing-key=dlq --producers 4 --consumers 0 --size 1000 --pmessages 250000'
+} &
+
+
+{
+    cd "$dir/rabbitmq-perf-test"
+    mvn exec:java -Dexec.mainClass=com.rabbitmq.perf.PerfTest \
+        -Dexec.args='--queue input --uri amqp://localhost:5672 --auto-delete false --flag persistent --queue-args x-dead-letter-exchange=,x-dead-letter-routing-key=dlq --producers 0 --consumers 10 --nack --requeue false'
+} &
+
+wait
