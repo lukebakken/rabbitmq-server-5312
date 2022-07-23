@@ -57,6 +57,4 @@ sleep 10
 
 make -C "$dir/rabbitmq-perf-test" \
     ARGS="--queue input --uri amqp://localhost:5672 --auto-delete false --flag persistent --queue-args x-dead-letter-exchange=,x-dead-letter-routing-key=dlq --producers 0 --consumers 10 --nack --requeue false --cmessages $msg_count" \
-    run &
-
-wait
+    run
