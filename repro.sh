@@ -8,6 +8,7 @@ set -o pipefail
 readonly dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 
 readonly rabbitmqadmin_bin="$dir/bin/rabbitmqadmin"
+readonly rabbitmqctl_bin="$dir/rabbitmq-server/sbin/rabbitmqctl"
 
 # Defaults for start-cluster:
 # TMPDIR ?= /tmp
@@ -40,30 +41,22 @@ file:read_file(F)]),halt().'
 
 wait
 
+make -C "$dir/rabbitmq-server" TEST_TMPDIR="$test_tmpdir" RABBITMQ_CONFIG_FILE="$dir/rabbitmq.conf" PLUGINS='rabbitmq_management rabbitmq_top' NODES=3 start-cluster
+
+"$rabbitmqctl_bin" --node rabbit-1 set_policy --apply-to queues ha '.' '{"ha-mode":"all", "ha-sync-mode": "automatic", "queue-mode": "lazy"}'
+
 "$rabbitmqadmin_bin" declare queue name=dlq auto_delete=false durable=true
 
-{
-    cd "$dir/rabbitmq-server"
+declare -ri msg_count=250000
 
-    make TEST_TMPDIR="$test_tmpdir" RABBITMQ_CONFIG_FILE="$dir/rabbitmq.conf" PLUGINS='rabbitmq_management rabbitmq_top' NODES=3 start-cluster
+make -C "$dir/rabbitmq-perf-test" \
+    ARGS="--queue input --uri amqp://localhost:5672 --auto-delete false --flag persistent --queue-args x-dead-letter-exchange=,x-dead-letter-routing-key=dlq --producers 4 --consumers 0 --size 1000 --pmessages $msg_count" \
+    run &
 
-    ./sbin/rabbitmqctl --node rabbit-1 set_policy --apply-to queues \
-        --priority 0 ha "." '{"ha-mode":"all", "ha-sync-mode": "automatic", "queue-mode": "lazy"}'
-}
+sleep 10
 
-make -C "$dir/rabbitmq-perf-test" ARGS='--consumers 0 --producers 1 --predeclared --queue gh-5086 --pmessages 2000000 --size 1024' run
-
-{
-    cd "$dir/rabbitmq-perf-test"
-    mvn exec:java -Dexec.mainClass=com.rabbitmq.perf.PerfTest \
-        -Dexec.args='--queue input --uri amqp://localhost:5672 --auto-delete false --flag persistent --queue-args x-dead-letter-exchange=,x-dead-letter-routing-key=dlq --producers 4 --consumers 0 --size 1000 --pmessages 250000'
-} &
-
-
-{
-    cd "$dir/rabbitmq-perf-test"
-    mvn exec:java -Dexec.mainClass=com.rabbitmq.perf.PerfTest \
-        -Dexec.args='--queue input --uri amqp://localhost:5672 --auto-delete false --flag persistent --queue-args x-dead-letter-exchange=,x-dead-letter-routing-key=dlq --producers 0 --consumers 10 --nack --requeue false'
-} &
+make -C "$dir/rabbitmq-perf-test" \
+    ARGS="--queue input --uri amqp://localhost:5672 --auto-delete false --flag persistent --queue-args x-dead-letter-exchange=,x-dead-letter-routing-key=dlq --producers 0 --consumers 10 --nack --requeue false --cmessages $msg_count" \
+    run &
 
 wait
