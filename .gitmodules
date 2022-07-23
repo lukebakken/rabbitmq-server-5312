@@ -1,0 +1,6 @@
+[submodule "rabbitmq-perf-test"]
+	path = rabbitmq-perf-test
+	url = https://github.com/rabbitmq/rabbitmq-perf-test.git
+[submodule "rabbitmq-server"]
+	path = rabbitmq-server
+	url = https://github.com/rabbitmq/rabbitmq-server.git
