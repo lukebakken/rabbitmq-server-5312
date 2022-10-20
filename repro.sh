@@ -49,11 +49,11 @@ make -C "$dir/rabbitmq-server" TEST_TMPDIR="$test_tmpdir" RABBITMQ_CONFIG_FILE="
 declare -ri msg_count=250000
 
 make -C "$dir/rabbitmq-perf-test" \
-    ARGS="--predeclared --queue input --uri amqp://localhost:5672 --flag persistent --producers 4 --consumers 0 --size 1000 --pmessages $msg_count" \
+    ARGS="--predeclared --queue input --uris amqp://localhost:5672,amqp://localhost:5673,amqp://localhost:5674 --flag persistent --producers 4 --consumers 0 --size 1000 --pmessages $msg_count" \
     run &
 
 sleep 10
 
 make -C "$dir/rabbitmq-perf-test" \
-    ARGS="--predeclared --queue input --uri amqp://localhost:5672 --producers 0 --consumers 10 --nack --requeue false" \
+    ARGS="--predeclared --queue input --uris amqp://localhost:5672,amqp://localhost:5673,amqp://localhost:5674 --producers 0 --consumers 10 --nack --requeue false" \
     run
