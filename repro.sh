@@ -43,18 +43,18 @@ wait
 
 make -C "$dir/rabbitmq-server" TEST_TMPDIR="$test_tmpdir" RABBITMQ_CONFIG_FILE="$dir/rabbitmq.conf" PLUGINS='rabbitmq_management rabbitmq_top' NODES=3 start-cluster
 
-"$rabbitmqctl_bin" --node rabbit-1 set_policy --apply-to queues ha '.' '{"ha-mode":"all", "ha-sync-mode": "automatic", "queue-mode": "lazy"}'
+"$rabbitmqctl_bin" --node rabbit-1 set_policy --apply-to queues ha '.' '{"ha-mode":"all","ha-sync-mode":"automatic"}'
 
 "$rabbitmqadmin_bin" declare queue name=dlq auto_delete=false durable=true
 
 declare -ri msg_count=250000
 
 make -C "$dir/rabbitmq-perf-test" \
-    ARGS="--queue input --uri amqp://localhost:5672 --auto-delete false --flag persistent --queue-args x-dead-letter-exchange=,x-dead-letter-routing-key=dlq --producers 4 --consumers 0 --size 1000 --pmessages $msg_count" \
+    ARGS="--queue input --uris amqp://localhost:5672,amqp://localhost:5673,amqp://localhost:5674 --auto-delete false --flag persistent --queue-args x-dead-letter-exchange=,x-dead-letter-routing-key=dlq --producers 4 --consumers 0 --size 1000 --pmessages $msg_count" \
     run &
 
 sleep 10
 
 make -C "$dir/rabbitmq-perf-test" \
-    ARGS="--queue input --uri amqp://localhost:5672 --auto-delete false --flag persistent --queue-args x-dead-letter-exchange=,x-dead-letter-routing-key=dlq --producers 0 --consumers 12 --nack --requeue false" \
+    ARGS="--queue input --uris amqp://localhost:5672,amqp://localhost:5673,amqp://localhost:5674 --auto-delete false --flag persistent --queue-args x-dead-letter-exchange=,x-dead-letter-routing-key=dlq --producers 0 --consumers 12 --nack --requeue false" \
     run
